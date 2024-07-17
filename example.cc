@@ -4,6 +4,9 @@
 #if !defined(SAFETENSORS_CPP_NO_IMPLEMENTATION)
 #define SAFETENSORS_CPP_IMPLEMENTATION
 #endif
+// #include <cuda.h>
+// #include <cuda_runtime.h>
+
 #include "safetensors.hh"
 
 #define USE_MMAP
@@ -103,6 +106,54 @@ std::string to_string_snipped(const safetensors::tensor_t &t,
   return ss.str();
 }
 
+void print_tensor_info(safetensors::safetensors_t st) {
+  const uint8_t *databuffer{nullptr};
+  if (st.mmaped) {
+    databuffer = st.databuffer_addr;
+  } else {
+    databuffer = st.storage.data();
+  }
+
+  size_t total_size = 0;
+
+  // Print Tensor info & value.
+  for (size_t i = 0; i < st.tensors.size(); i++) {
+    std::string key = st.tensors.keys()[i];
+    safetensors::tensor_t tensor;
+    st.tensors.at(i, &tensor);
+
+    // total_size += safetensors::get_tensor_size(tensor);
+    std::cout << key << ": " << safetensors::get_dtype_str(tensor.dtype) << " ";
+    std::cout << "[";
+    for (size_t i = 0; i < tensor.shape.size(); i++) {
+      if (i > 0) {
+        std::cout << ", ";
+      }
+      std::cout << std::to_string(tensor.shape[i]);
+    }
+    std::cout << "]\n";
+
+    std::cout << "  data_offsets[" << std::to_string(tensor.data_offsets[0])
+              << ", " << std::to_string(tensor.data_offsets[1]) << "]\n";
+    std::cout << "  " << to_string_snipped(tensor, databuffer) << "\n";
+  }
+
+  // std::cout << "Total size: " << total_size << " bytes\n";
+
+  // Print metadata
+  if (st.metadata.size()) {
+    std::cout << "\n";
+    std::cout << "__metadata__\n";
+    for (size_t i = 0; i < st.metadata.size(); i++) {
+      std::string key = st.metadata.keys()[i];
+      std::string value;
+      st.metadata.at(i, &value);
+
+      std::cout << "  " << key << ":" << value << "\n";
+    }
+  }
+}
+
 int main(int argc, char **argv) {
   std::string filename = "gen/model.safetensors";
 
@@ -139,48 +190,9 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  const uint8_t *databuffer{nullptr};
-  if (st.mmaped) {
-    databuffer = st.databuffer_addr;
-  } else {
-    databuffer = st.storage.data();
-  }
+  print_tensor_info(st);
 
-  // Print Tensor info & value.
-  for (size_t i = 0; i < st.tensors.size(); i++) {
-    std::string key = st.tensors.keys()[i];
-    safetensors::tensor_t tensor;
-    st.tensors.at(i, &tensor);
-
-    std::cout << key << ": "
-              << safetensors::get_dtype_str(tensor.dtype) << " ";
-    std::cout << "[";
-    for (size_t i = 0; i < tensor.shape.size(); i++) {
-      if (i > 0) {
-        std::cout << ", ";
-      }
-      std::cout << std::to_string(tensor.shape[i]);
-    }
-    std::cout << "]\n";
-
-    std::cout << "  data_offsets["
-              << std::to_string(tensor.data_offsets[0]) << ", "
-              << std::to_string(tensor.data_offsets[1]) << "]\n";
-    std::cout << "  " << to_string_snipped(tensor, databuffer) << "\n";
-  }
-
-  // Print metadata
-  if (st.metadata.size()) {
-    std::cout << "\n";
-    std::cout << "__metadata__\n";
-    for (size_t i = 0; i < st.metadata.size(); i++) {
-      std::string key = st.metadata.keys()[i];
-      std::string value;
-      st.metadata.at(i, &value);
-
-      std::cout << "  " << key << ":" << value << "\n";
-    }
-  }
+  // pin st to memory using cuda apis
 
   return EXIT_SUCCESS;
 }

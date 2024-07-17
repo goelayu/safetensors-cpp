@@ -5,10 +5,10 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
-#include <cstdint>
 
 #ifdef __ANDROID__
 #ifdef SAFETENSORS_CPP_ANDROID_LOAD_FROM_ASSETS
@@ -21,7 +21,6 @@ AAssetManager *asset_manager = nullptr;
 extern AAssetManager *asset_manager;
 #endif
 #endif
-
 
 namespace safetensors {
 
@@ -124,7 +123,7 @@ class ordered_dict {
   std::map<std::string, T> _m;
 };
 
-} // namespace minijson
+}  // namespace minijson
 
 template <typename T>
 using ordered_dict = minijson::ordered_dict<T>;
@@ -137,7 +136,8 @@ struct tensor_t {
 
 struct safetensors_t {
   // we need ordered dict(preserves the order of key insertion)
-  // as done in Python's OrderedDict, since JSON data may not be sorted by its key string.
+  // as done in Python's OrderedDict, since JSON data may not be sorted by its
+  // key string.
   ordered_dict<tensor_t> tensors;
   ordered_dict<std::string> metadata;
   std::vector<uint8_t> storage;  // empty when mmap'ed
@@ -209,6 +209,8 @@ bool load_from_memory(const uint8_t *addr, const size_t nbytes,
 bool mmap_from_file(const std::string &filename, safetensors_t *st,
                     std::string *warn, std::string *err);
 
+// Return the size of the given safetensor object
+// size_t size_of_tensor(const tensor_t &t);
 //
 // Load safetensors from mmaped region.
 // databuffer is not copied to `safetensors_t` object, thus the app must not
@@ -267,6 +269,7 @@ size_t get_shape_size(const tensor_t &t);
 
 // Returns dtype size in bytes.
 size_t get_dtype_bytes(const safetensors::dtype dtype);
+size_t get_tensor_size(const tensor_t &t);
 std::string get_dtype_str(const safetensors::dtype dtype);
 
 // Validate data_offsets of all tensors in safetensors_t.
@@ -324,7 +327,7 @@ float fp16_to_float(uint16_t x);
 #include <string>
 #include <vector>
 
-//#define __MINIJSON_LIBERAL
+// #define __MINIJSON_LIBERAL
 
 // We recommended to use simdjson from_chars.
 // Using strtod() is a fallback
@@ -344,7 +347,7 @@ char *to_chars(char *first, const char *last, double value);
 
 }  // namespace internal
 }  // namespace simdjson
-}  // namesapce minijson
+}  // namespace minijson
 
 #endif
 
@@ -3419,7 +3422,6 @@ char *to_chars(char *first, const char *last, double value) {
 
 #endif  // MINIJSON_IMPLEMENTATION
 
-
 namespace safetensors {
 
 // Max header(JSON) size. 100 MB as done in original safetensors implementation.
@@ -3545,25 +3547,27 @@ bool ReadWholeFile(std::vector<unsigned char> *out, std::string *err,
 #endif
 }
 
-bool parse_metadata(const ::minijson::value &v,
-                    ordered_dict<std::string> &dst, std::string *err) {
+bool parse_metadata(const ::minijson::value &v, ordered_dict<std::string> &dst,
+                    std::string *err) {
   if (auto po = v.as<::minijson::object>()) {
     for (size_t i = 0; i < po->size(); i++) {
       ::minijson::value ov;
       if (!po->at(i, &ov)) {
-          if (err) {
-            (*err) +=
-                "[Internal error] Invalid object found in __metadata__, at index " + std::to_string(i) + ".\n";
-          }
-          return false;
+        if (err) {
+          (*err) +=
+              "[Internal error] Invalid object found in __metadata__, at "
+              "index " +
+              std::to_string(i) + ".\n";
+        }
+        return false;
       }
 
       if (auto so = ov.as<std::string>()) {
         if (dst.count(po->keys()[i])) {
           // This should not be happen though
           if (err) {
-            (*err) +=
-                "Duplicate key `" + po->keys()[i] + "` found in __metadata__.\n";
+            (*err) += "Duplicate key `" + po->keys()[i] +
+                      "` found in __metadata__.\n";
           }
           return false;
         }
@@ -3721,7 +3725,6 @@ bool parse_data_offsets(const ::minijson::value &v, std::array<size_t, 2> &dst,
 bool parse_tensor(const std::string &name, const ::minijson::value &v,
                   tensor_t &tensor, std::string *err) {
   if (auto po = v.as<::minijson::object>()) {
-
     bool dtype_found{false};
     bool shape_found{false};
     bool data_offsets_found{false};
@@ -4625,6 +4628,10 @@ size_t get_shape_size(const tensor_t &t) {
   return sz;
 }
 
+size_t get_tensor_size(const tensor_t &t) {
+  return get_dtype_bytes(t.dtype) * get_shape_size(t);
+}
+
 bool validate_data_offsets(const safetensors_t &st, std::string &err) {
   bool valid{true};
 
@@ -4639,8 +4646,7 @@ bool validate_data_offsets(const safetensors_t &st, std::string &err) {
 
   size_t ntensors{0};
   // Iterate with key insertion order.
-  for (size_t i =0 ;i < st.tensors.size(); i++) {
-
+  for (size_t i = 0; i < st.tensors.size(); i++) {
     std::string key = st.tensors.keys()[i];
 
     tensor_t tensor;
@@ -4673,9 +4679,8 @@ bool validate_data_offsets(const safetensors_t &st, std::string &err) {
     }
 
     if (tensor.data_offsets[1] > databuffersize) {
-      ss << "Tensor `" << key << "`.data_offset.END "
-         << tensor.data_offsets[1] << " exceeds databuffer size "
-         << databuffersize << ".\n";
+      ss << "Tensor `" << key << "`.data_offset.END " << tensor.data_offsets[1]
+         << " exceeds databuffer size " << databuffersize << ".\n";
       valid = false;
     }
 
@@ -4748,7 +4753,6 @@ bool save_to_memory(const safetensors_t &st, std::vector<uint8_t> *dst,
   size_t ntensors = 0;
   {
     for (size_t i = 0; i < st.tensors.size(); i++) {
-
       std::string key = st.tensors.keys()[i];
       safetensors::tensor_t tensor;
       st.tensors.at(i, &tensor);
@@ -4802,8 +4806,8 @@ bool save_to_memory(const safetensors_t &st, std::vector<uint8_t> *dst,
   if ((header_size % 8) != 0) {
     pad_bytes = 8 - (header_size % 8);
   }
-  //printf("header_size = %d\n", int(header_size));
-  //printf("pad_bytes = %d\n", int(pad_bytes));
+  // printf("header_size = %d\n", int(header_size));
+  // printf("pad_bytes = %d\n", int(pad_bytes));
   size_t padded_header_size = header_size + pad_bytes;
   dst->resize(8 + padded_header_size + databuffer_size);
 
