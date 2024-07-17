@@ -106,7 +106,7 @@ std::string to_string_snipped(const safetensors::tensor_t &t,
   return ss.str();
 }
 
-void print_tensor_info(safetensors::safetensors_t st) {
+void print_tensor_info(safetensors::safetensors_t &st) {
   const uint8_t *databuffer{nullptr};
   if (st.mmaped) {
     databuffer = st.databuffer_addr;
@@ -122,7 +122,7 @@ void print_tensor_info(safetensors::safetensors_t st) {
     safetensors::tensor_t tensor;
     st.tensors.at(i, &tensor);
 
-    // total_size += safetensors::get_tensor_size(tensor);
+    total_size += safetensors::get_tensor_size(tensor);
     std::cout << key << ": " << safetensors::get_dtype_str(tensor.dtype) << " ";
     std::cout << "[";
     for (size_t i = 0; i < tensor.shape.size(); i++) {
@@ -138,7 +138,7 @@ void print_tensor_info(safetensors::safetensors_t st) {
     std::cout << "  " << to_string_snipped(tensor, databuffer) << "\n";
   }
 
-  // std::cout << "Total size: " << total_size << " bytes\n";
+  std::cout << "Total size: " << total_size << " bytes\n";
 
   // Print metadata
   if (st.metadata.size()) {
